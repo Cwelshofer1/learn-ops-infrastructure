@@ -64,10 +64,10 @@ MONARCH_DIR="${ROOT_DIR}/service-monarch"
 # Repo URLs
 # Adjust these if needed.
 #######################################
-API_REPO_URL="https://github.com/System-Explorer-Cohorts/learn-ops-api.git"
-CLIENT_REPO_URL="https://github.com/System-Explorer-Cohorts/learn-ops-client.git"
-INFRA_REPO_URL_DEFAULT="https://github.com/System-Explorer-Cohorts/learn-ops-infrastructure.git"
-MONARCH_REPO_URL="https://github.com/System-Explorer-Cohorts/service-monarch.git"
+API_REPO_URL="git@github.com:System-Explorer-Cohorts/learn-ops-api.git"
+CLIENT_REPO_URL="git@github.com:System-Explorer-Cohorts/learn-ops-client.git"
+INFRA_REPO_URL_DEFAULT="git@github.com:System-Explorer-Cohorts/learn-ops-infrastructure.git"
+MONARCH_REPO_URL="git@github.com:System-Explorer-Cohorts/service-monarch.git"
 NSS_ORG="System-Explorer-Cohorts"
 GITHUB_API="https://api.github.com"
 
@@ -618,6 +618,85 @@ normalize_infra_location_if_needed() {
 }
 
 #######################################
+# SSH setup
+#######################################
+ensure_github_ssh() {
+  step "Setting up SSH access to GitHub"
+
+  # Fast path: SSH to GitHub already works — nothing to do.
+  local test_out
+  test_out="$(ssh -o BatchMode=yes -o ConnectTimeout=5 -T git@github.com 2>&1)" || true
+  if echo "${test_out}" | grep -q "successfully authenticated"; then
+    ok "GitHub SSH already configured and working"
+    section_done "GitHub SSH access"
+    return 0
+  fi
+
+  # Find an existing private key or generate a new one.
+  local ssh_key=""
+  for candidate in "${HOME}/.ssh/id_ed25519" "${HOME}/.ssh/id_ecdsa" "${HOME}/.ssh/id_rsa"; do
+    if [[ -f "${candidate}" ]]; then
+      ssh_key="${candidate}"
+      break
+    fi
+  done
+
+  if [[ -z "${ssh_key}" ]]; then
+    substep "No SSH key found — generating a new ed25519 key..."
+    ssh-keygen -t ed25519 -C "${USER_EMAIL}" -f "${HOME}/.ssh/id_ed25519" -N ""
+    ssh_key="${HOME}/.ssh/id_ed25519"
+    ok "SSH key generated: ${ssh_key}"
+  else
+    ok "Found existing SSH key: ${ssh_key}"
+  fi
+
+  # Ensure ssh-agent is running and the key is loaded.
+  if ! ssh-add -l >/dev/null 2>&1; then
+    eval "$(ssh-agent -s)" >/dev/null
+  fi
+  if [[ "${OS_FAMILY}" == "macOS" ]]; then
+    # Prefer the modern --apple-use-keychain flag (macOS Ventura+);
+    # fall back to legacy -K (older macOS), then plain add.
+    ssh-add --apple-use-keychain "${ssh_key}" 2>/dev/null \
+      || ssh-add -K "${ssh_key}" 2>/dev/null \
+      || ssh-add "${ssh_key}"
+  else
+    ssh-add "${ssh_key}"
+  fi
+
+  # Display public key and guide the student to add it to GitHub.
+  echo
+  printf "%b\n" "${BOLD}Your SSH public key — copy everything on the line below:${RESET}"
+  echo
+  cat "${ssh_key}.pub"
+  echo
+  printf "%b\n" "${BOLD}Add this key to GitHub now:${RESET}"
+  printf "   %s\n" "1. Open: https://github.com/settings/ssh/new"
+  printf "   %s\n" "2. Title: Learning Platform"
+  printf "   %s\n" "3. Paste the key above into the 'Key' field"
+  printf "   %s\n" "4. Click 'Add SSH key'"
+  echo
+
+  # Verify the connection — loop until it succeeds.
+  local verified=false
+  while [[ "${verified}" == "false" ]]; do
+    confirm_yes_no "Press Y once you have added the SSH key to GitHub"
+    substep "Verifying SSH connection to GitHub..."
+    local verify_out
+    verify_out="$(ssh -o ConnectTimeout=10 -T git@github.com 2>&1)" || true
+    if echo "${verify_out}" | grep -q "successfully authenticated"; then
+      ok "SSH connection to GitHub verified"
+      verified=true
+    else
+      err "Could not verify connection. GitHub responded: ${verify_out}"
+      warn "Double-check that the key was saved correctly, then try again."
+    fi
+  done
+
+  section_done "GitHub SSH access"
+}
+
+#######################################
 # Clone helpers
 #######################################
 clone_if_missing() {
@@ -709,7 +788,7 @@ ensure_fork_exists() {
 
     if [[ "${check_code}" == "200" ]]; then
       ok "Fork ready: github.com/${GH_USERNAME}/${repo_name}"
-      echo "https://github.com/${GH_USERNAME}/${repo_name}.git"
+      echo "git@github.com:${GH_USERNAME}/${repo_name}.git"
       return 0
     fi
 
@@ -1405,7 +1484,16 @@ cleanup_docker_resources() {
     while IFS= read -r img; do
       [[ -n "$img" ]] && raw_images+=("$img")
     done < <(docker images --filter "label=com.docker.compose.project=${project}" \
-               --format '{{.Repository}}:{{.Tag}}' 2>/dev/null || true)
+               --format '{{if ne .Repository "<none>"}}{{.Repository}}:{{.Tag}}{{else}}{{.ID}}{{end}}' 2>/dev/null || true)
+  done
+
+  # Also catch named volumes directly via compose label (survives container removal)
+  for project in "${projects[@]}"; do
+    while IFS= read -r vol; do
+      [[ -n "$vol" ]] && raw_volumes+=("$vol")
+    done < <(docker volume ls \
+               --filter "label=com.docker.compose.project=${project}" \
+               --format '{{.Name}}' 2>/dev/null || true)
   done
 
   # Deduplicate images and volumes (docker handles duplicates gracefully, but keep output clean)
@@ -1487,8 +1575,9 @@ main() {
   check_port_conflicts
   ensure_workspace_root
   normalize_infra_location_if_needed "$@"
-  clone_workspace_repos
   collect_user_identity
+  ensure_github_ssh
+  clone_workspace_repos
   collect_config
   setup_student_forks
   write_env_files
