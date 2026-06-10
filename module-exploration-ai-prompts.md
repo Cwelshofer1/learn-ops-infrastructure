@@ -6,6 +6,14 @@ Also map the directories inside LearningAPI and explain the purpose of each one 
 Do this in a table format like this: 
 
 ## 2. Dependencies
+Open pipfile and explain what it is and its purpose for existing in the project.
+Then find django, djangorestframework, and django-allauth. Explain what they are and there purpose for existing in the project.
+Put the answers in a table format only for django, djangorestframework, and django-allauth. Have the table format be like this:
+| Package | What functionality does it provide and why? |
+|---------|---------------------------------------------|
+| django | |
+| djangorestframework | |
+| django-allauth | |
 
 
 
