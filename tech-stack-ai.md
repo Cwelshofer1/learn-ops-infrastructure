@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> a7793f18ae4ef0ee51878018872ca6c073f74417
 # Tech Stack (AI)
 
 ## 1. Run Questions
@@ -115,6 +118,9 @@ make up       # Then bring the full system up
 | | | |
 
 ## 3. System Overview
+<<<<<<< HEAD
 =======
 AI overview
 >>>>>>> 1a4ea77aefb41d0e613aa904409749faebbab7fd
+=======
+>>>>>>> a7793f18ae4ef0ee51878018872ca6c073f74417
