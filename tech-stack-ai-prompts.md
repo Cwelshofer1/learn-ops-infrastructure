@@ -3,7 +3,7 @@
 ## 1. Run Questions
 
 ### 1a. Config Files
-Find all config and environments files in the repository and include 3 values per file. Record only the config name,
+Find all config and environments files in the repository and include at least 3 values per file. Record only the config name,
   not its value. Write POSTGRES_USER, not POSTGRES_USER=supersecretpassword123. Add to this file "tech-stack-ai.md"
 [Pasted text #1 +6 lines]
 
