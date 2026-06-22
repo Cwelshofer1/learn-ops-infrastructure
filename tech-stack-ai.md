@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Tech Stack (AI)
 
 ## 1. Run Questions
@@ -114,3 +115,6 @@ make up       # Then bring the full system up
 | | | |
 
 ## 3. System Overview
+=======
+AI overview
+>>>>>>> 1a4ea77aefb41d0e613aa904409749faebbab7fd
